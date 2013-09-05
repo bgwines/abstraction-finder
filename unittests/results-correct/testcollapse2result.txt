@@ -1,0 +1,4 @@
+rooted at < ('print', 'z') >:  [('print',), ('z',)]
+rooted at < ('print', 'z', 'zz') >:  [('print',), ('z',), ('zz',)]
+rooted at < ('print', 'zz') >:  [('print',), ('zz',)]
+rooted at < ('z', 'zz') >:  [('z',), ('zz',)]

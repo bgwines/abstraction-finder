@@ -1,0 +1,1 @@
+for testcase in ./test-cases do {python ../abstraction_finder.py $testcase > results-test/$testcase}
