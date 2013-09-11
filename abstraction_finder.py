@@ -433,7 +433,6 @@ class AbstractionFinder():
 						seen_nodes
 					)
 					# doesn't look like it's going to keep old parts (clarity)
-					# TODO: only abstract those that call others?
 
 	def _remove_domain_from_range(self, mapping):
 		to_delete = set()
