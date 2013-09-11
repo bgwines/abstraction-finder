@@ -28,6 +28,10 @@ class Parser():
 			return False
 		return line[0:3] == "def"
 
+	def _filter_comments(self, line):
+		index = line.find('#')
+		return line[:index]
+
 	def identify_functions(self, file_name):
 		file = self._open_file(file_name)
 		if file is None:
@@ -36,6 +40,10 @@ class Parser():
 		functions = []
 		curr_function = []
 		for line in file:
+			line = self._filter_comments(line)
+			if len(line) == 0:
+				continue
+
 			if self._starts_function(line):
 				if curr_function != []:
 					if self._starts_function(curr_function[0]):
@@ -143,63 +151,47 @@ class AbstractionFinder():
 		src = src[1:]
 
 		subsets = []
-		subsets += self._gen_powerset(src, so_far.append(elem), all_subsets)
-		subsets += self._gen_powerset(src, so_far, all_subsets)
+		subsets += self._gen_powerset(src, so_far)
+		subsets += self._gen_powerset(src, so_far + [elem])
 		return subsets
 
-	def _is_independent(self, curr_node, so_far, self_contained_sets_const):
-		for already_neighbored_node in so_far:
-			if curr_node in self_contained_sets_const[already_neighbored_node]:
-				return False
+	def _nodes_are_independent(self, node1, node2, self_contained_sets):
+		return (
+			node1 not in self_contained_sets[node2] and
+			node2 not in self_contained_sets[node1]
+		)
+
+	def _all_elems_are_independent(self, subset, self_contained_sets):
+		for elem1 in subset:
+			for elem2 in subset:
+				if elem1 == elem2:
+					continue
+				if not self._nodes_are_independent(
+					elem1,
+					elem2,
+					self_contained_sets
+				):
+					return False
 		return True
 
-	def _identify_independent_unions2(self, self_contained_sets):
-		unions = self._identify_independent_unions2_rec(self_contained_sets, self_contained_sets.copy())
-		self_contained_sets.update(unions)
-
-	def _identify_independent_unions2_rec(self, self_contained_sets_const, self_contained_sets, so_far = [], unions = {}):
-		if len(self_contained_sets) == 0:
-			nodes = tuple()
-			union = set()
-			for node in so_far:
-				nodes += node
-				union.add(node)
-			if len(so_far) != 0:
-				unions[nodes] = union
-			return
-
-		curr_node = self_contained_sets.popitem()[0]
-		before_recursion = self_contained_sets.copy()
-		self._identify_independent_unions2_rec(self_contained_sets_const, self_contained_sets, so_far, unions)
-		self_contained_sets = before_recursion
-
-		if self._is_independent(curr_node, so_far, self_contained_sets_const):
-			so_far_copy = so_far[:] + [curr_node]
-			self._identify_independent_unions2_rec(self_contained_sets_const, self_contained_sets, so_far_copy, unions)
-
-		return unions
-
-
 	def _identify_independent_unions(self, self_contained_sets):
-		unions = {}
-		seen_unions = set()
-		for s1 in self_contained_sets.iterkeys():
-			for s2 in self_contained_sets.iterkeys():
-				if (s2 not in self_contained_sets[s1] and \
-					s1 not in self_contained_sets[s2]
-				):
-					union = frozenset([s1, s2]) #still using this?
-					if union not in seen_unions:
-						seen_unions.add(union)
-						unions[s1 + s2] = list(
-							set.union(
-								self_contained_sets[s1],
-								self_contained_sets[s2]
-							)
-						)
-		self_contained_sets.update(unions)
+		powerset = self._gen_powerset(self_contained_sets.keys())
 
-	# finds from node and all its siblings
+		valid_subsets = {}
+		for subset in powerset:
+			if len(subset) <= 1:
+				continue
+
+			if self._all_elems_are_independent(subset, self_contained_sets):
+				key = tuple()
+				value = set()
+				for node in subset:
+					key += node
+					value.add(node)
+				
+				valid_subsets[key] = value;
+		self_contained_sets.update(valid_subsets)
+
 	# TODO: edge_function should be an ivar
 	def _identify_self_contained_sets_from_node(
 		self,
@@ -208,6 +200,7 @@ class AbstractionFinder():
 		self_contained_sets,
 		seen_nodes
 	):
+		seen_nodes.add(node)
 		if len(edge_function[node]) == 0:
 			s = set()
 			s.add(node)
@@ -410,14 +403,14 @@ class AbstractionFinder():
 		for e in todel:
 			del mapping[e]
 
-	def _identify_self_contained_sets(self, edge_function):
-		self._collapse_cycles(edge_function)
-
-		#TODO: decomp
-		self_contained_sets = {}
+	def _identify_self_contained_sets_from_each_node(
+		self,
+		edge_function,
+		self_contained_sets
+	):
 		seen_nodes = set()
 		for node in edge_function.iterkeys():
-			if node not in seen_nodes: # i.e. node is not a nth-degree child of a previous key //works?
+			if node not in seen_nodes: # i.e. node is not a nth-degree child of a previous key
 				self_contained_sets_from_node =\
 					self._identify_self_contained_sets_from_node(
 						node,
@@ -428,9 +421,20 @@ class AbstractionFinder():
 					# doesn't look like it's going to keep old parts (clarity)
 					# TODO: only abstract those that call others?
 
-		self._identify_independent_unions2(self_contained_sets)
+
+	def _identify_self_contained_sets(self, edge_function):
+		self._collapse_cycles(edge_function)
+
+		self_contained_sets = {}
+		self._identify_self_contained_sets_from_each_node(
+			edge_function,
+			self_contained_sets
+		)
+		
+		self._identify_independent_unions(self_contained_sets)
 
 		self._remove_mappings_with_range_of_size_1(self_contained_sets)
+		
 		return self_contained_sets
 
 	def _print_self_contained_sets(self, self_contained_sets):

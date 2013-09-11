@@ -1,4 +1,7 @@
-
+#TODO: format output
+#      library functions
+#      classes
+#      self._print_self_contained_sets(self_contained_sets)
 def s():
     t()
 
