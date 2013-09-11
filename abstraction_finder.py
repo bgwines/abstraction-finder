@@ -1,10 +1,11 @@
 
-import sys
-import re
+import copy
 import fileinput
 import os
 import os.path
 import pdb
+import re
+import sys
 
 class Parser():
 	def _open_file(self, filename):
@@ -139,8 +140,9 @@ class AbstractionFinder():
 			for f in called_functions:
 				f = (f[0],)#
 				if f not in calls.iterkeys():
-					#to account for library functions -- will be overriden later by function definition, if exists (later in iteration)
-					#TODO: `if f not in defined_functions` 
+					# to account for library functions -- will be overriden
+					# later by function definition, if exists (later in
+					# iteration)
 					calls[f] = []
 		return calls
 
@@ -400,8 +402,32 @@ class AbstractionFinder():
 				edge_function
 			)
 
+	def _filter_redundant_cycles_one_iteration(self, cycles):
+		for i1, cycle1 in enumerate(cycles):
+			for cycle2 in cycles:
+				if cycle1 == cycle2:
+					continue
+				enclosed = True
+				for node_in_cycle1 in cycle1:
+					if node_in_cycle1 not in cycle2:
+						enclosed = False
+						break
+				if enclosed:
+					del cycles[i1]
+					return True
+
+	def _filter_redundant_cycles(self, cycles):
+		filtered_a_cycle = True
+		while (filtered_a_cycle):
+			filtered_a_cycle = self._filter_redundant_cycles_one_iteration(
+				cycles
+			)
+
 	def _collapse_cycles_one_iteration(self, edge_function):
 		cycles_to_collapse = self._identify_cycles_to_collapse(edge_function)
+		
+		self._filter_redundant_cycles(cycles_to_collapse)
+
 		for cycle_to_collapse in cycles_to_collapse:
 			self._collapse_cycle(edge_function, cycle_to_collapse)
 
@@ -426,13 +452,12 @@ class AbstractionFinder():
 		for node in edge_function.iterkeys():
 			if node not in seen_nodes: # i.e. node is not a nth-degree child of a previous key
 				self_contained_sets_from_node =\
-					self._identify_self_contained_sets_from_node(
+					self._identify_self_contained_sets_from_node(# doesn't look like it's going to keep old parts (clarity)
 						node,
 						edge_function,
 						self_contained_sets,
 						seen_nodes
 					)
-					# doesn't look like it's going to keep old parts (clarity)
 
 	def _remove_domain_from_range(self, mapping):
 		to_delete = set()
@@ -458,15 +483,78 @@ class AbstractionFinder():
 					flattened_value.add(node)
 			self_contained_sets[key] = flattened_value
 
+	#TODO: fix
+	def _should_be_private(
+		self,
+		public_node,
+		self_contained_set,
+		original_edge_function
+	):
+		return False
 
-	def _filter_self_contained_sets(self, self_contained_sets):	
+	#TODO: fix
+	def _make_node_private(
+		self,
+		public_node,
+		self_contained_set,
+		self_contained_sets,
+		modified_self_contained_sets
+	):
+		#pdb.set_trace()
+		real_domain = tuple()
+		for node in self_contained_set:
+			if node != public_node:
+				real_domain += (node,)
+
+		real_range = self_contained_sets[self_contained_set]
+		real_range.add(public_node)
+
+		if real_domain not in modified_self_contained_sets:
+			modified_self_contained_sets[real_domain] = real_range
+		else:
+			modified_self_contained_sets[real_domain].update(real_range)
+
+	def _un_make_everything_in_cycles_public(
+		self,
+		self_contained_sets,
+		original_edge_function
+	):
+		modified_self_contained_sets = {}
+		for self_contained_set in self_contained_sets:
+			for public_node in self_contained_set:
+				if self._should_be_private(
+					public_node,
+					self_contained_set,
+					original_edge_function
+				):
+					self._make_node_private(
+						public_node,
+						self_contained_set,
+						self_contained_sets,
+						modified_self_contained_sets
+					)
+		self_contained_sets.update(modified_self_contained_sets)
+
+
+	def _filter_self_contained_sets(
+		self,
+		self_contained_sets,
+		original_edge_function
+	):	
 		self._remove_mappings_with_range_of_size_1(self_contained_sets)
 
 		self._flatten_values(self_contained_sets)
 
 		self._remove_domain_from_range(self_contained_sets)
 
+		#pdb.set_trace()
+		#self._un_make_everything_in_cycles_public(
+		#	self_contained_sets,
+		#	original_edge_function
+		#)
+
 	def _identify_self_contained_sets(self, edge_function):
+		original_edge_function = copy.deepcopy(edge_function)
 		self._collapse_cycles(edge_function)
 
 		self_contained_sets = {}
@@ -477,7 +565,10 @@ class AbstractionFinder():
 		
 		self._identify_independent_unions(self_contained_sets)
 
-		self._filter_self_contained_sets(self_contained_sets)
+		self._filter_self_contained_sets(
+			self_contained_sets,
+			original_edge_function
+		)
 
 		return self_contained_sets
 

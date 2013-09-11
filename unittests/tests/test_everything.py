@@ -1,16 +1,19 @@
 def s():
     b()
     a()
-        
-def a():
+
+def a2():
     a()
+   
+def a():
+    a2()
     ta()
 
 def b():
     tb()
 
 def ta():
-    pass
+    ta()
 
 def tb():
     tb2()
