@@ -1,16 +1,22 @@
-#TODO: format output
-#      library functions
-#      classes
-#      self._print_self_contained_sets(self_contained_sets)
 def s():
-    t()
+    b()
+    a()
+        
+def a():
+    a()
+    ta()
 
-def t():
-    if (z(zz())):
-        print('hi')
+def b():
+    tb()
 
-def z():
-    z()
-
-def zz():
+def ta():
     pass
+
+def tb():
+    tb2()
+
+def tb2():
+    tb3()
+
+def tb3():
+    tb()

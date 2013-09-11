@@ -11,10 +11,10 @@ class Parser():
 		if len(filename) <= 2:
 			return False
 
-		if re.match("/.*", filename):
+		if re.match('/.*', filename):
 			filename = filename[1:]
 
-		return open(filename, "r")
+		return open(filename, 'r')
 
 	def set_language(self, file_name):
 		extension = file_name[file_name.find('.'):]
@@ -24,9 +24,10 @@ class Parser():
 		self.language = extension_map[extension]
 
 	def _starts_function(self, line):
+		line = line.strip()
 		if len(line) < 3:
 			return False
-		return line[0:3] == "def"
+		return line[0:3] == 'def'
 
 	def _filter_comments(self, line):
 		index = line.find('#')
@@ -187,7 +188,8 @@ class AbstractionFinder():
 				value = set()
 				for node in subset:
 					key += node
-					value.add(node)
+					for value_node in self_contained_sets[node]:
+						value.add(value_node)
 				
 				valid_subsets[key] = value;
 		self_contained_sets.update(valid_subsets)
@@ -251,13 +253,25 @@ class AbstractionFinder():
 			)
 		return called_functions_from_cycle
 
+	def _remove_elem_from_list(self, the_list, elem):
+		modified_list = []
+		for list_elem in the_list:
+			if elem != list_elem:
+				modified_list.append(list_elem)
+		return modified_list
+
 	#too long
 	def _collapse_cycle(self, edge_function, cycle):
 		called_functions_from_cycle =\
 			self._get_functions_called_from_cycle(edge_function, cycle)
 
 		if len(cycle) == 1:
-			edge_function[tuple(cycle)] = [] #otherwise[()]
+			modified_called_functions_from_cycle = self._remove_elem_from_list(
+				called_functions_from_cycle,
+				cycle[0]
+			)
+			edge_function[tuple(cycle)] = modified_called_functions_from_cycle
+			return
 		else:
 			edge_function[tuple(cycle)] = called_functions_from_cycle
 
@@ -421,6 +435,37 @@ class AbstractionFinder():
 					# doesn't look like it's going to keep old parts (clarity)
 					# TODO: only abstract those that call others?
 
+	def _remove_domain_from_range(self, mapping):
+		to_delete = set()
+		for domain_elem in mapping:
+			modified_range = set()
+			for range_elem in mapping[domain_elem]:
+				if range_elem not in domain_elem:
+					modified_range.add(range_elem)
+			if len(modified_range) == 0:
+				to_delete.add(domain_elem)
+			else:
+				mapping[domain_elem] = modified_range
+
+		for elem_to_delete in to_delete:
+			del mapping[elem_to_delete]
+
+	def _flatten_values(self, self_contained_sets):
+		for key in self_contained_sets:
+			value = self_contained_sets[key]
+			flattened_value = set()
+			for super_node in value:
+				for node in super_node:
+					flattened_value.add(node)
+			self_contained_sets[key] = flattened_value
+
+
+	def _filter_self_contained_sets(self, self_contained_sets):	
+		self._remove_mappings_with_range_of_size_1(self_contained_sets)
+
+		self._flatten_values(self_contained_sets)
+
+		self._remove_domain_from_range(self_contained_sets)
 
 	def _identify_self_contained_sets(self, edge_function):
 		self._collapse_cycles(edge_function)
@@ -433,15 +478,16 @@ class AbstractionFinder():
 		
 		self._identify_independent_unions(self_contained_sets)
 
-		self._remove_mappings_with_range_of_size_1(self_contained_sets)
-		
+		self._filter_self_contained_sets(self_contained_sets)
+
 		return self_contained_sets
 
 	def _print_self_contained_sets(self, self_contained_sets):
 		for self_contained_set in self_contained_sets:
-			print "rooted at <",
-			print self_contained_set,
-			print ">: ",#\n\t\t\t",
+			print 'abstraction:'
+			print '\t public methods: ',
+			print list(self_contained_set)
+			print '\t private methods: ',
 			print list(self_contained_sets[self_contained_set])
 
 
@@ -497,7 +543,7 @@ def pack_value(value):
 
 def __main__():
 	if len(sys.argv) != 2:
-		print "Pass exactly one argument (the file-name), please."
+		print 'Pass exactly one argument (the file-name), please.'
 		return
 	file_name = sys.argv[1]
 
