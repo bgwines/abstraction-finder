@@ -1,7 +1,17 @@
 abstraction-finder
 ==================
 
-Static analysis on code to find of abstractable sets of functions.
+abstraction-finder is a program to do static analysis on code to find of abstractable sets of functions.
+
+The main idea is that abstractions work by hiding implementation details -- here, the heuristic provided for abstraction-classification is if all the functions in the encapsulation don't call any functions but each other (except for library functions, here interpreted as functions not defined in the given file). 
+
+The code can handle recursion of arbitrary order, and finds cycles by an algorithm similar to Tarjan's algorithm. It then collapses the cycles before finding abstractable sets of functions. 
+
+Then, the algorithm finds sets of functions that don't call any other non-library functions through DFS. 
+
+Functions that don't call each other and don't have any children of any depth that call each other or the functions in question can also be bundled together; after all, they also fit our criteria. Thus, an exponential number of abstractions is possible (visualise a set where all functions are leaf-functions). 
+
+The point of the program is to execute the algorithm, not to do complicated parsing on the input file, so the parser is rather limited.
 
 logic
 =====
